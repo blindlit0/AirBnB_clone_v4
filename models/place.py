@@ -1,92 +1,96 @@
 #!/usr/bin/python3
 """
-Place Class from Models Module
+BaseModel Class of Models Module
 """
+
 import os
-from models.base_model import BaseModel, Base
-from sqlalchemy.orm import relationship
-from sqlalchemy import Column, Integer, String, Float, ForeignKey,\
-    MetaData, Table, ForeignKey
-from sqlalchemy.orm import backref
+import json
 import models
+from uuid import uuid4, UUID
+from datetime import datetime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Integer, String, Float, DateTime
+
 storage_type = os.environ.get('HBNB_TYPE_STORAGE')
 
+"""
+    Creates instance of Base if storage type is a database
+    If not database storage, uses class Base
+"""
+if storage_type == 'db':
+    Base = declarative_base()
+else:
+    class Base:
+        pass
 
-if os.getenv("HBNB_TYPE_STORAGE") == "db":
-    place_amenity = Table('place_amenity', Base.metadata,
-                          Column('place_id',
-                                 String(60),
-                                 ForeignKey('places.id')),
-                          Column('amenity_id',
-                                 String(60),
-                                 ForeignKey('amenities.id',
-                                            ondelete="CASCADE")))
 
+class BaseModel:
+    """
+        attributes and functions for BaseModel class
+    """
 
-class Place(BaseModel, Base):
-    """Place class handles all application places"""
-    if storage_type == "db":
-        __tablename__ = 'places'
-        city_id = Column(String(60), ForeignKey('cities.id'), nullable=False)
-        user_id = Column(String(60), ForeignKey('users.id'), nullable=False)
-        name = Column(String(128), nullable=False)
-        description = Column(String(1024), nullable=True)
-        number_rooms = Column(Integer, nullable=False, default=0)
-        number_bathrooms = Column(Integer, nullable=False, default=0)
-        max_guest = Column(Integer, nullable=False, default=0)
-        price_by_night = Column(Integer, nullable=False, default=0)
-        latitude = Column(Float, nullable=True)
-        longitude = Column(Float, nullable=True)
+    if storage_type == 'db':
+        id = Column(String(60), nullable=False, primary_key=True)
+        created_at = Column(DateTime, nullable=False,
+                            default=datetime.utcnow())
+        updated_at = Column(DateTime, nullable=False,
+                            default=datetime.utcnow())
 
-        amenities = relationship('Amenity', secondary="place_amenity",
-                                 viewonly=False)
-        reviews = relationship('Review', backref='place', cascade='delete')
-    else:
-        city_id = ''
-        user_id = ''
-        name = ''
-        description = ''
-        number_rooms = 0
-        number_bathrooms = 0
-        max_guest = 0
-        price_by_night = 0
-        latitude = 0.0
-        longitude = 0.0
-        amenity_ids = []
+    def __init__(self, *args, **kwargs):
+        """instantiation of new BaseModel Class"""
+        self.id = str(uuid4())
+        self.created_at = datetime.now()
+        if kwargs:
+            for key, value in kwargs.items():
+                setattr(self, key, value)
 
-    if storage_type != "db":
-        @property
-        def amenities(self):
-            """
-            ammenities getter
-            :return: list of amenitites
-            """
-            amenity_objs = []
+    def __is_serializable(self, obj_v):
+        """
+            private: checks if object is serializable
+        """
+        try:
+            obj_to_str = json.dumps(obj_v)
+            return obj_to_str is not None and isinstance(obj_to_str, str)
+        except:
+            return False
 
-            for a_id in self.amenity_ids:
-                amenity_objs.append(models.storage.get("Amenity", str(a_id)))
+    def bm_update(self, name, value):
+        """
+            updates the basemodel and sets the correct attributes
+        """
+        setattr(self, name, value)
+        if storage_type != 'db':
+            self.save()
 
-            return amenity_objs
+    def save(self):
+        """updates attribute updated_at to current time"""
+        if storage_type != 'db':
+            self.updated_at = datetime.now()
+        models.storage.new(self)
+        models.storage.save()
 
-        @amenities.setter
-        def amenities(self, amenity):
-            """
-            ammenities setter
-            :return:
-            """
-            self.amenity_ids.append(amenity.id)
+    def to_json(self):
+        """returns json representation of self"""
+        bm_dict = {}
+        for key, value in (self.__dict__).items():
+            if (self.__is_serializable(value)):
+                bm_dict[key] = value
+            else:
+                bm_dict[key] = str(value)
+        bm_dict['__class__'] = type(self).__name__
+        if '_sa_instance_state' in bm_dict:
+            bm_dict.pop('_sa_instance_state')
+        if storage_type == "db" and 'password' in bm_dict:
+            bm_dict.pop('password')
+        return bm_dict
 
-        @property
-        def reviews(self):
-            """
-            reviews getter
-            :return: list of reviews
-            """
-            all_reviews = models.storage.all("Review")
-            place_reviews = []
+    def __str__(self):
+        """returns string type representation of object instance"""
+        class_name = type(self).__name__
+        return '[{}] ({}) {}'.format(class_name, self.id, self.__dict__)
 
-            for review in all_reviews.values():
-                if review.place_id == self.id:
-                    place_reviews.append(review)
-
-            return place_reviews
+    def delete(self):
+        """
+            deletes current instance from storage
+        """
+        self.delete()
