@@ -1,46 +1,33 @@
 #!/usr/bin/python3
 """
-Script sets up and runs a Flask web application.
+The RESTful api starts here. The api aids data access in the app.
 """
+from os import getenv
 
 from flask import Flask, jsonify
 from flask_cors import CORS
-from os import getenv
 
 from api.v1.views import app_views
 from models import storage
 
-
 app = Flask(__name__)
-
-CORS(app, resources={r"/*": {"origins": "0.0.0.0"}})
-
+app.url_map.strict_slashes = False
 app.register_blueprint(app_views)
+CORS(app, origins=["0.0.0.0"])
+host = getenv("HBNB_API_HOST", "0.0.0.0")
+port = getenv("HBNB_API_PORT", "5000")
 
 
 @app.teardown_appcontext
 def teardown(exception):
-    """
-    Teardown function to close the storage session.
-    """
+    """Cleanup operations"""
     storage.close()
 
 
 @app.errorhandler(404)
-def handle_404(exception):
-    """
-    handles 404 error
-    :return: Returns 404 JSON response
-    """
-    data = {
-        "error": "Not found"
-    }
-
-    resp = jsonify(data)
-    resp.status_code = 404
-
-    return(resp)
+def not_found(error):
+    return jsonify({"error": "Not found"}), 404
 
 
 if __name__ == "__main__":
-    app.run(getenv("HBNB_API_HOST"), getenv("HBNB_API_PORT"))
+    app.run(host, port, threaded=True, debug=True)
