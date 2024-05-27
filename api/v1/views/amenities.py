@@ -1,45 +1,102 @@
 #!/usr/bin/python3
-"""
-app
-"""
-
-from flask import Flask, jsonify
-from flask_cors import CORS
-from os import getenv
-
+"""Handles all RESTful API actions for `Amenity`"""
 from api.v1.views import app_views
 from models import storage
+from models.amenity import Amenity
+
+from flask import jsonify, abort, request
 
 
-app = Flask(__name__)
+@app_views.route("/amenities")
+def amenities():
+    """Retrieve list of all `Amenity` objects
 
-CORS(app, resources={r"/*": {"origins": "0.0.0.0"}})
-
-app.register_blueprint(app_views)
-
-
-@app.teardown_appcontext
-def teardown(exception):
+    Returns:
+        `flask.Response`: List of all the amenities
     """
-    teardown function
+    amenities = storage.all(Amenity)
+    result = []
+
+    for amenity in amenities.values():
+        result.append(amenity.to_dict())
+
+    return jsonify(result)
+
+
+@app_views.route("/amenities/<amenity_id>")
+def amenity(amenity_id):
+    """Retrieve one `Amenity`
+
+    Args:
+        amenity_id (str): Amenity identifier
+
+    Returns:
+        flask.Response: An amenity in json
     """
-    storage.close()
+    amenity = storage.get(Amenity, amenity_id)
+    if not amenity:
+        abort(404)
+
+    return jsonify(amenity.to_dict())
 
 
-@app.errorhandler(404)
-def handle_404(exception):
+@app_views.route("/amenities/<amenity_id>", methods=["DELETE"])
+def delete_amenity(amenity_id):
+    """Delete an amenity.
+
+    Args:
+        amenity_id (str): The ID of the amenity.
+
+    Returns:
+        dict: An empty JSON.
+
+    Raises:
+        404: If the specified amenity_id does not exist.
     """
-    handles 404 error
-    :return: returns 404 json
+    amenity = storage.get(Amenity, amenity_id)
+    if amenity is None:
+        abort(404)
+
+    amenity.delete()
+    storage.save()
+
+    return jsonify({})
+
+
+@app_views.route("/amenities", methods=["POST"])
+def create_amenity():
+    """Create an amenity
+
+    Returns:
+        dict: New amenity in JSON
+
+    Raises:
+        400: If request body is not a valid JSON
+        400: If the payload does not contain the key `name`
     """
-    data = {
-        "error": "Not found"
-    }
+    payload = request.get_json()
+    if not payload:
+        abort(400, "Not a JSON")
+    if "name" not in payload:
+        abort(400, "Missing name")
 
-    resp = jsonify(data)
-    resp.status_code = 404
+    amenity = Amenity(**payload)
+    amenity.save()
 
-    return(resp)
+    return jsonify(amenity.to_dict())
 
-if __name__ == "__main__":
-    app.run(getenv("HBNB_API_HOST"), getenv("HBNB_API_PORT"))
+
+@app_views.route("/amenities/<amenity_id>", methods=["PUT"])
+def update_amenity(amenity_id):
+    amenity = storage.get(Amenity, amenity_id)
+    payload = request.get_json()
+    if not amenity:
+        abort(404)
+    if not payload:
+        abort(400, "Not a JSON")
+
+    key = "name"
+    setattr(amenity, key, payload[key])
+    amenity.save()
+
+    return jsonify(amenity.to_dict())
