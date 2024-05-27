@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-Script sets up and runs a Flask web application.
+app
 """
 
 from flask import Flask, jsonify
@@ -21,7 +21,7 @@ app.register_blueprint(app_views)
 @app.teardown_appcontext
 def teardown(exception):
     """
-    Teardown function to close the storage session.
+    teardown function
     """
     storage.close()
 
@@ -30,7 +30,7 @@ def teardown(exception):
 def handle_404(exception):
     """
     handles 404 error
-    :return: Returns 404 JSON response
+    :return: returns 404 json
     """
     data = {
         "error": "Not found"
@@ -40,7 +40,6 @@ def handle_404(exception):
     resp.status_code = 404
 
     return(resp)
-
 
 if __name__ == "__main__":
     app.run(getenv("HBNB_API_HOST"), getenv("HBNB_API_PORT"))
